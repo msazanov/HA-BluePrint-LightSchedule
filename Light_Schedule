@@ -17,8 +17,8 @@ blueprint:
       name: Время начала дня
       description: Время начала светового дня.
       selector:
-        entity:
-          domain: input_datetime
+        time: # Используем правильный тип селектора для времени
+          icon: mdi:clock-start
 
 trigger:
   - platform: time_pattern
@@ -83,4 +83,3 @@ sensor:
               {% endif %}
             {% endif %}
           {% endif %}
-
