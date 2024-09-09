@@ -13,18 +13,12 @@ blueprint:
           unit_of_measurement: hours
           mode: slider
           step: 1
-          icon: mdi:sun-clock-outline
     day_start:
       name: Время начала дня
       description: Время начала светового дня.
       selector:
         entity:
           domain: input_datetime
-          device_class: time
-          icon: mdi:clock-start
-  variables:
-    light_period_hours: !input light_period
-    start_time: !input day_start
 
 trigger:
   - platform: time_pattern
@@ -35,7 +29,8 @@ condition: []
 action:
   - choose:
       - conditions:
-          - "{{ states(input_datetime.start_time) != 'unknown' }}"
+          - condition: template
+            value_template: "{{ states(input_datetime.day_start) != 'unknown' }}"
         sequence:
           - service: input_boolean.turn_on
             data: {}
