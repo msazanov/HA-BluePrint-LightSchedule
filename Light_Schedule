@@ -1,0 +1,90 @@
+blueprint:
+  name: Управление световым днем
+  description: Этот шаблон управляет включением/выключением света на основе времени и длительности светового дня.
+  domain: automation
+  input:
+    light_period:
+      name: Длительность светового дня
+      description: Длительность светового дня в часах (0-24).
+      selector:
+        number:
+          min: 0
+          max: 24
+          unit_of_measurement: hours
+          mode: slider
+          step: 1
+          icon: mdi:sun-clock-outline
+    day_start:
+      name: Время начала дня
+      description: Время начала светового дня.
+      selector:
+        entity:
+          domain: input_datetime
+          device_class: time
+          icon: mdi:clock-start
+  variables:
+    light_period_hours: !input light_period
+    start_time: !input day_start
+
+trigger:
+  - platform: time_pattern
+    minutes: "/1"
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - "{{ states(input_datetime.start_time) != 'unknown' }}"
+        sequence:
+          - service: input_boolean.turn_on
+            data: {}
+    default:
+      - service: input_boolean.turn_off
+        data: {}
+
+sensor:
+  - platform: template
+    sensors:
+      light_day_text:
+        friendly_name: Текущий статус светового дня
+        value_template: >
+          {% set light_period_hours = states('input_number.light_period') | float %}
+          {% set start_time = states('input_datetime.day_start') %}
+          {% set start_time_obj = strptime(start_time, '%H:%M:%S') %}
+          {% set current_time = now() %}
+          {% set current_time_obj = strptime(current_time.strftime('%H:%M'), '%H:%M') %}
+          {% set end_time_obj = (start_time_obj + timedelta(hours=light_period_hours)) %}
+          {% set start_time_str = start_time_obj.strftime('%H:%M') %}
+          {% set end_time_str = end_time_obj.strftime('%H:%M') %}
+          {% if light_period_hours == 0 %}
+            Свет выключен, световой период отключен.
+          {% else %}
+            {% if start_time_obj.time() <= end_time_obj.time() %}
+              {% if start_time_obj.time() <= current_time_obj.time() < end_time_obj.time() %}
+                Световой день начинается в {{ start_time_str }} и длится {{ light_period_hours | int }} часов.
+                Сейчас день, до конца дня осталось {{ ((end_time_obj - current_time_obj).seconds // 3600) }} часов и {{ ((end_time_obj - current_time_obj).seconds // 60) % 60 }} минут (выключение в {{ end_time_str }}).
+              {% else %}
+                {% if current_time_obj.time() < start_time_obj.time() %}
+                  {% set time_until_start = start_time_obj - current_time_obj %}
+                {% else %}
+                  {% set time_until_start = (start_time_obj + timedelta(days=1)) - current_time_obj %}
+                {% endif %}
+                Световой день начинается в {{ start_time_str }} и длится {{ light_period_hours | int }} часов.      
+                Сейчас ночь, свет включится через {{ (time_until_start.seconds // 3600) }} часов и {{ (time_until_start.seconds // 60) % 60 }} минут (включение в {{ start_time_str }}).
+              {% endif %}
+            {% else %}
+              {% if current_time_obj.time() >= start_time_obj.time() or current_time_obj.time() < end_time_obj.time() %}
+                {% if current_time_obj.time() < end_time_obj.time() %}
+                  {% set remaining_time = end_time_obj - current_time_obj %}
+                  Сейчас день, до конца дня осталось {{ (remaining_time.seconds // 3600) }} часов и {{ (remaining_time.seconds // 60) % 60 }} минут (выключение завтра в {{ end_time_str }}).
+                {% else %}
+                  {% set remaining_time = end_time_obj - current_time_obj + timedelta(days=1) %}
+                  Сейчас день, до конца дня осталось {{ (remaining_time.seconds // 3600) }} часов и {{ (remaining_time.seconds // 60) % 60 }} минут (выключение в {{ end_time_str }}).
+                {% endif %}
+              {% else %}
+                {% set time_until_start = (start_time_obj + timedelta(days=1)) - current_time_obj %}
+                Сейчас ночь, свет включится через {{ (time_until_start.seconds // 3600) }} часов и {{ (time_until_start.seconds // 60) % 60 }} минут (включение завтра в {{ start_time_str }}).
+              {% endif %}
+            {% endif %}
+          {% endif %}
